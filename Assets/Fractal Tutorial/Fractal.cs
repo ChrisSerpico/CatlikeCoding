@@ -4,7 +4,7 @@ using System.Collections;
 public class Fractal : MonoBehaviour 
 {
     // Components that make up the fractal
-    public Mesh mesh;
+    public Mesh[] meshes;
     public Material material;
 
     // how deep this fractal is allowed to go 
@@ -16,6 +16,18 @@ public class Fractal : MonoBehaviour
 
     // how much children of this fractal will be scaled by
     public float childScale;
+
+    // how likely this fractal is to spawn children
+    public float spawnProbability;
+
+    // maximum possible rotation speed
+    public float maxRotationSpeed;
+
+    // the current rotation speed 
+    private float rotationSpeed;
+
+    // how far a mesh can be twisted out of its 'correct' position
+    public float maxTwist;
 
     // the directions in which children are added
     private static Vector3[] childDirections = 
@@ -37,10 +49,42 @@ public class Fractal : MonoBehaviour
         Quaternion.Euler(-90f, 0f, 0f)
     };
 
+    // variously colored materials, used to differentiate children
+    private Material[,] materials;
+
+    // initialize materials, assigning them different colors
+    private void InitializeMaterials()
+    {
+        materials = new Material[maxDepth + 1, 2];
+
+        for (int i = 0; i <= maxDepth; i++)
+        {
+            float t = i / (maxDepth - 1f);
+            t *= t;
+            materials[i, 0] = new Material(material);
+            materials[i, 0].color = Color.Lerp(Color.white, Color.yellow, t);
+            materials[i, 1] = new Material(material);
+            materials[i, 1].color = Color.Lerp(Color.white, Color.cyan, t);
+        }
+        materials[maxDepth, 0].color = Color.magenta;
+        materials[maxDepth, 1].color = Color.red;
+    }
+
     private void Start()
     {
-        gameObject.AddComponent<MeshFilter>().mesh = mesh;
-        gameObject.AddComponent<MeshRenderer>().material = material;
+        // set rotation speed
+        rotationSpeed = Random.Range(-maxRotationSpeed, maxRotationSpeed);
+
+        // twist transform
+        transform.Rotate(Random.Range(-maxTwist, maxTwist), 0f, 0f);
+
+        // initialize materials if they haven't been
+        if (materials == null)
+        {
+            InitializeMaterials();
+        }
+        gameObject.AddComponent<MeshFilter>().mesh = meshes[Random.Range(0, meshes.Length)];
+        gameObject.AddComponent<MeshRenderer>().material = materials[depth, Random.Range(0, materials.GetLength(1))];
 
         // only create a child fractal if we aren't too deep
         if (depth < maxDepth)
@@ -49,14 +93,22 @@ public class Fractal : MonoBehaviour
         }
     }
 
+    private void Update()
+    {
+        transform.Rotate(0f, rotationSpeed * Time.deltaTime, 0f);
+    }
+
     // create multiple children in multiple different directions
     private IEnumerator CreateChildren()
     {
         for (int i = 0; i < childDirections.Length; i++)
         {
-            // pause before creating a child, so the user can see each child being added
-            yield return new WaitForSeconds(Random.Range(0.1f, 0.5f));
-            new GameObject("Fractal Child").AddComponent<Fractal>().Initialize(this, i);
+            if (Random.value < spawnProbability)
+            {
+                // pause before creating a child, so the user can see each child being added
+                yield return new WaitForSeconds(Random.Range(0.1f, 0.5f));
+                new GameObject("Fractal Child").AddComponent<Fractal>().Initialize(this, i);
+            }
         }
     }
 
@@ -68,11 +120,14 @@ public class Fractal : MonoBehaviour
     private void Initialize (Fractal parent, int childIndex)
     {
         // initialize values
-        mesh = parent.mesh;
-        material = parent.material;
+        meshes = parent.meshes;
+        materials = parent.materials;
         maxDepth = parent.maxDepth;
         depth = parent.depth + 1;
         childScale = parent.childScale;
+        spawnProbability = parent.spawnProbability;
+        maxRotationSpeed = parent.maxRotationSpeed;
+        maxTwist = parent.maxTwist;
 
         // make this fractal a child of parent
         transform.parent = parent.transform;
